@@ -1,10 +1,9 @@
 """Tests for individual checks."""
 
-import httpx
-
 from datetime import datetime, timezone
-import pytest
 
+import httpx
+import pytest
 
 from app.checks import check_http, days_until
 
