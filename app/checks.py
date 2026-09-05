@@ -47,8 +47,7 @@ def check_tls(hostname: str, port: int = 443, warn_days: int = 14, timeout: floa
     """Report how many days remain before the TLS certificate expires."""
     context = ssl.create_default_context()
     try:
-        with socket.create_connection((hostname, port), timeout=timeout) as raw:
-            with context.wrap_socket(raw, server_hostname=hostname) as tls:
+        with socket.create_connection((hostname, port), timeout=timeout) as raw, context.wrap_socket(raw, server_hostname=hostname) as tls:
                 cert = tls.getpeercert()
     except OSError as exc:
         return CheckResult(name="tls", ok=False, detail=f"handshake failed: {type(exc).__name__}")
