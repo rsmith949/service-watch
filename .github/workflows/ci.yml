@@ -26,3 +26,6 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+      - name: Run Docker
+        run: docker build
