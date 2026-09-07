@@ -28,5 +28,5 @@ jobs:
         run: python -m pytest -q
 
       - name: Run Docker
-        run: docker build -t service-watch:${{ github.sha }}
+        run: docker build -t service-watch:${{ github.sha }} .
 
