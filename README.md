@@ -1,4 +1,3 @@
-cat > README.md <<'EOF'
 # service-watch
 
 External uptime and TLS certificate monitoring for self-hosted services.
@@ -7,7 +6,7 @@ External uptime and TLS certificate monitoring for self-hosted services.
 
 Monitoring your own infrastructure from inside that infrastructure is circular. If the
 host goes down, the monitor goes down with it and tells you nothing. `service-watch`
-runs somewhere else  a container in AWS that watches services from the outside and
+runs somewhere else — a container in AWS that watches services from the outside and
 reports only what it can genuinely reach.
 
 It answers questions you would otherwise learn about from a complaint:
@@ -25,7 +24,7 @@ nothing breaks for weeks, and then everything breaks at once.
 | HTTP  | Status code and response time |
 | TLS   | Days remaining before expiry, warning below a configurable threshold |
 
-A failing check exits non-zero. The application knows nothing about AWS  it signals
+A failing check exits non-zero. The application knows nothing about AWS — it signals
 failure through its exit code, and the deployment decides what that means.
 
 ## Architecture
@@ -48,12 +47,28 @@ There are none. No password, key, or secret is stored anywhere in this system.
 
 | Actor | How it authenticates |
 |-------|---------------------|
-| The pipeline | GitHub OIDC federation  a signed token exchanged for credentials that expire in an hour |
-| The host | EC2 instance profile  credentials fetched from the instance metadata service |
-| A human | IAM Identity Center  `aws sso login`, four-hour sessions |
+| The pipeline | GitHub OIDC federation — a signed token exchanged for credentials that expire in an hour |
+| The host | EC2 instance profile — credentials fetched from the instance metadata service |
+| A human | Short-lived session credentials; no static access keys on disk |
 
 Registry access on the host goes through the ECR credential helper, which fetches a
-short-lived token on demand and never writes it to disk.
+token on demand and never writes it to disk.
+
+## Infrastructure
+
+All 19 AWS resources are defined in Terraform under `terraform/` — IAM roles and
+policies, the GitHub OIDC provider, ECR, the security group, SNS, SSM, and the EC2
+instance. `terraform plan` reports no drift between the code and what is deployed.
+
+State lives in S3: versioned, encrypted, and lock-protected using S3-native locking.
+
+`terraform fmt` and `terraform validate` run on every pull request through pre-commit.
+
+**`terraform apply` is deliberately not automated.** Doing so would require granting the
+pipeline permission to modify IAM — including the roles that constrain the pipeline
+itself. Automating it properly needs a separate role, plan output reviewed in the pull
+request, and a manual approval gate. That is a security design, not a checkbox, so
+applies are run by a human until it is built.
 
 ## Running it
 
@@ -74,34 +89,34 @@ committed to this repository.
 
 The threshold is 14 rather than 30 deliberately. Let's Encrypt certificates last 90 days
 and renewal begins at 30, so fewer than 14 days remaining means renewal has already
-failed repeatedly  a real problem rather than a routine countdown.
+failed repeatedly — a real problem rather than a routine countdown.
 
 ## Pipeline
 
 Every pull request runs, in order:
 
-1. `pre-commit`  ruff, workflow linting, YAML validation, secret detection
+1. `pre-commit` — ruff, workflow linting, YAML validation, secret detection, Terraform fmt and validate
 2. Unit tests
 3. Container build
 4. Trivy vulnerability report
-5. Trivy gate  fails on CRITICAL findings that have fixes available
+5. Trivy gate — fails on CRITICAL findings that have fixes available
 
 Merges to `main` additionally push a SHA-tagged image to ECR and publish that tag to
-Parameter Store. The push is idempotent: it checks whether the tag already exists, because
-ECR tag immutability rejects a re-push and pipeline steps should be safe to re-run.
+Parameter Store. The push is idempotent: it checks whether the tag already exists,
+because ECR tag immutability rejects a re-push and pipeline steps should be safe to
+re-run.
 
 The gate blocks only on critical *and* fixable findings. Blocking on everything produces
 a permanently red pipeline that people learn to bypass.
 
-Dependencies are watched by Dependabot across the base image, actions, and Python
-packages, grouped into one pull request per ecosystem. Every update is validated by the
-full pipeline before it can merge.
+Dependabot watches the base image, actions, and Python packages, grouped into one pull
+request per ecosystem. Every update is validated by the full pipeline before it can merge.
 
 ## Deployment
 
 Deployment is **pull-based**. The pipeline publishes the current image tag to SSM
 Parameter Store; the instance reads it before each run and pulls that image. The pipeline
-has no permission to execute anything on the host  it publishes a version, and the host
+has no permission to execute anything on the host — it publishes a version, and the host
 adopts it on its own schedule. A compromised pipeline cannot reach the server.
 
 An EC2 instance runs the checks on a systemd timer every 15 minutes. The host has **no
@@ -123,9 +138,12 @@ Dependencies are declared in `requirements.in` and `requirements-dev.in`, then l
     uv pip compile requirements.in -o requirements.txt
     uv pip compile requirements-dev.in -o requirements-dev.txt -c requirements.txt
 
-Do not edit `requirements.txt` or `requirements-dev.txt` by hand  they are generated.
+Do not edit `requirements.txt` or `requirements-dev.txt` by hand — they are generated.
 The `-c` flag constrains dev dependencies to versions already pinned for runtime, so
 tests and production cannot drift apart.
+
+For Terraform, supply your own `terraform/terraform.tfvars` with an `alert_email` value;
+it is gitignored so no address is published here.
 
 The test suite makes no network calls. HTTP behavior is exercised with test doubles, and
 the system clock is injected rather than read, so certificate-expiry logic is
@@ -136,17 +154,21 @@ deterministic instead of depending on the date the suite happens to run.
 - **Nothing monitors the monitor.** A single instance with no redundancy: if it stops,
   the silence is indistinguishable from everything being fine. A heartbeat or dead-man's
   switch is the fix.
-- **Infrastructure was created by hand** in the AWS console and is not yet codified.
 - **Alerts do not deduplicate.** A sustained outage emails every 15 minutes.
 - **No DNS drift detection**, so a stale dynamic-DNS record and a genuine outage look
   the same.
+- **The SNS email subscription cannot be created from scratch.** AWS requires a human to
+  confirm by email, so a `terraform apply` against an empty account would leave it
+  pending. It is importable and manageable, but not fully reproducible.
+- **The software inside the instance is not managed as code.** Docker, the systemd units
+  and the wrapper script were configured by hand. That is configuration management
+  rather than provisioning — a different problem, and the next one worth solving.
 - **Workloads run in the AWS Organization's management account.** Acceptable for a
   single-account personal project; a separate member account is correct practice.
 
 ## Roadmap
 
-- Terraform for the AWS resources
+- Configuration management for the instance's software
 - Heartbeat monitoring, so a dead monitor is noticed
 - Alert deduplication
 - DNS drift detection
-EOF
