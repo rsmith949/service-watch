@@ -27,3 +27,9 @@ repos:
         entry: (PASTE_|CHANGEME|dummytag|@VERSION|YOUR-USERNAME)
         files: \.(ya?ml|py)$|Dockerfile
         exclude: ^\.pre-commit-config\.yaml$
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.109.1
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
