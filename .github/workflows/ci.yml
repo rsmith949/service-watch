@@ -4,6 +4,10 @@ on:
   - push
   - pull_request
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -27,6 +31,23 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-      - name: Run Docker
+       - name: Build image
         run: docker build -t service-watch:${{ github.sha }} .
 
+      - name: Configure AWS credentials
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Log in to Amazon ECR
+        if: github.ref == 'refs/heads/main'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and push to ECR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker tag service-watch:${{ github.sha }} ${{ steps.ecr.outputs.registry }}/service-watch:${{ github.sha }}
+          docker push ${{ steps.ecr.outputs.registry }}/service-watch:${{ github.sha }}
