@@ -26,3 +26,4 @@ repos:
         language: pygrep
         entry: (PASTE_|CHANGEME|dummytag|@VERSION|YOUR-USERNAME)
         files: \.(ya?ml|py)$|Dockerfile
+        exclude: ^\.pre-commit-config\.yaml$

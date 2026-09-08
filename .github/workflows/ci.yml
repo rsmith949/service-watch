@@ -26,31 +26,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.lock.txt -r requirements-dev.txt
 
-      - name: Check Ruff
-        run: ruff check .
-
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure
+
+      - name: Run tests
+        run: python -m pytest -q
 
       - name: Build image
         run: docker build -t service-watch:${{ github.sha }} .
 
-      - name: Scan image (blocking)
-        uses: aquasecurity/trivy-action@0.9.2
+      - name: Vulnerability report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: service-watch:${{ github.sha }}
+          severity: LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: '0'
+          format: table
+
+      - name: Vulnerability gate
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: service-watch:${{ github.sha }}
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: '1'
-          format: table
-
-      - name: Full vulnerability report
-        if: always()
-        uses: aquasecurity/trivy-action@0.9.2
-        with:
-          image-ref: service-watch:${{ github.sha }}
-          severity: LOW,MEDIUM,HIGH,CRITICAL
-          exit-code: '0'
           format: table
 
       - name: Configure AWS credentials
