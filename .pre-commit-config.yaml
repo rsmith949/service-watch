@@ -33,3 +33,12 @@ repos:
     hooks:
       - id: terraform_fmt
       - id: terraform_validate
+
+  - repo: local
+    hooks:
+      - id: trivy-config
+        name: Trivy IaC misconfiguration scan
+        language: system
+        entry: trivy config --exit-code 1 --severity HIGH,CRITICAL terraform/
+        pass_filenames: false
+        files: ^terraform/.*\.tf$

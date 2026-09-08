@@ -1,0 +1,29 @@
+# Accepted and deferred misconfigurations. Reviewed 2026-09-08.
+# Every entry states why. Re-review when the infrastructure changes.
+
+# Unrestricted egress. The monitor's purpose is reaching arbitrary
+# external endpoints to check whether they respond; restricting egress
+# by CIDR would defeat it. No ingress rules exist on this group.
+AWS-0104
+
+# No S3 access logging on the state bucket. Logging needs a second
+# bucket, which is then flagged for the same thing. State access is
+# already attributable via CloudTrail in this single-user account.
+AWS-0089
+
+# ECR uses the AWS-managed key rather than a CMK. ECR encryption is
+# fixed at repository creation, so changing it means destroying the
+# repository and every published image. Not worth it for key rotation
+# control over public base layers.
+AWS-0033
+
+# Root EBS volume unencrypted. Fixing this replaces the instance, and
+# the software on it is not yet managed as code (see README). Deferred
+# until user_data provisioning lands, not accepted permanently.
+AWS-0131
+
+# SNS topic uses the AWS-managed key rather than a CMK. Terraform state
+# gets a customer-managed key because it can contain secrets; alert
+# payloads are hostnames and journal excerpts, where the AWS-managed key
+# is proportionate. Deliberate difference, not an oversight.
+AWS-0136

@@ -41,6 +41,16 @@ resource "aws_iam_policy" "ecr_pull" {
       Effect   = "Allow"
       Resource = "arn:aws:sns:us-west-2:182715287298:service-watch-alerts"
       Sid      = "PublishAlerts"
+      }, {
+      Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+      Effect   = "Allow"
+      Resource = "*"
+      Sid      = "AlertTopicEncryption"
+      Condition = {
+        StringEquals = {
+          "kms:ViaService" = "sns.us-west-2.amazonaws.com"
+        }
+      }
     }]
     Version = "2012-10-17"
   })

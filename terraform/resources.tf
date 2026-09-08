@@ -12,7 +12,8 @@ resource "aws_ecr_repository" "service_watch" {
 }
 
 resource "aws_sns_topic" "alerts" {
-  name = "service-watch-alerts"
+  name              = "service-watch-alerts"
+  kms_master_key_id = "alias/aws/sns"
 }
 
 resource "aws_ssm_parameter" "image_tag" {
@@ -36,6 +37,7 @@ resource "aws_security_group" "service_watch" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "All outbound; the monitor must reach arbitrary external endpoints"
   }
 }
 
@@ -51,6 +53,10 @@ resource "aws_instance" "service_watch" {
   subnet_id              = "subnet-0bfecba0c9170dc9e"
   vpc_security_group_ids = [aws_security_group.service_watch.id]
   iam_instance_profile   = aws_iam_instance_profile.instance.name
+
+  metadata_options {
+    http_tokens = "required"
+  }
 
   tags = {
     Name = "service-watch"
