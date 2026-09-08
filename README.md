@@ -25,24 +25,35 @@ nothing breaks for weeks, and then everything breaks at once.
 | HTTP  | Status code and response time |
 | TLS   | Days remaining before expiry, warning below a configurable threshold |
 
-A failing check exits non-zero, so the container composes with anything that reads exit
-codes. The application knows nothing about AWS  the deployment decides what failure
-means.
+A failing check exits non-zero. The application knows nothing about AWS  it signals
+failure through its exit code, and the deployment decides what that means.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     A[commit] --> B[GitHub Actions]
-    B --> C[lint, tests, build, Trivy]
+    B --> C[pre-commit, tests, build, Trivy]
     C --> D[(Amazon ECR)]
-    D --> E[EC2 instance]
-    E -->|systemd timer, every 15 min| F[checks run]
-    F -->|non-zero exit| G[SNS email]
+    C --> E[/SSM Parameter Store/]
+    F[EC2 instance] -->|reads tag| E
+    F -->|pulls image| D
+    F -->|systemd timer, every 15 min| G[checks run]
+    G -->|non-zero exit| H[SNS email]
 ```
 
-No credential exists anywhere in that chain. The pipeline authenticates to AWS with OIDC
-federation; the instance authenticates with an instance profile.
+## Credentials
+
+There are none. No password, key, or secret is stored anywhere in this system.
+
+| Actor | How it authenticates |
+|-------|---------------------|
+| The pipeline | GitHub OIDC federation  a signed token exchanged for credentials that expire in an hour |
+| The host | EC2 instance profile  credentials fetched from the instance metadata service |
+| A human | IAM Identity Center  `aws sso login`, four-hour sessions |
+
+Registry access on the host goes through the ECR credential helper, which fetches a
+short-lived token on demand and never writes it to disk.
 
 ## Running it
 
@@ -75,20 +86,27 @@ Every pull request runs, in order:
 4. Trivy vulnerability report
 5. Trivy gate  fails on CRITICAL findings that have fixes available
 
-Merges to `main` additionally push a SHA-tagged image to Amazon ECR. The IAM role is
-scoped to one repository, one branch, and one ECR resource.
+Merges to `main` additionally push a SHA-tagged image to ECR and publish that tag to
+Parameter Store. The push is idempotent: it checks whether the tag already exists, because
+ECR tag immutability rejects a re-push and pipeline steps should be safe to re-run.
 
 The gate blocks only on critical *and* fixable findings. Blocking on everything produces
 a permanently red pipeline that people learn to bypass.
 
+Dependencies are watched by Dependabot across the base image, actions, and Python
+packages, grouped into one pull request per ecosystem. Every update is validated by the
+full pipeline before it can merge.
+
 ## Deployment
 
-An EC2 instance runs the image on a systemd timer every 15 minutes. It re-authenticates
-to ECR before each run via `ExecStartPre`, using its instance profile  ECR tokens expire
-after 12 hours, so a manual login would fail silently the next day.
+Deployment is **pull-based**. The pipeline publishes the current image tag to SSM
+Parameter Store; the instance reads it before each run and pulls that image. The pipeline
+has no permission to execute anything on the host  it publishes a version, and the host
+adopts it on its own schedule. A compromised pipeline cannot reach the server.
 
-The host has **no inbound ports open**. Administration is through SSM Session Manager,
-which the agent initiates outbound. There is no SSH key and no port 22.
+An EC2 instance runs the checks on a systemd timer every 15 minutes. The host has **no
+inbound ports open**; administration is through SSM Session Manager, which the agent
+initiates outbound. There is no SSH key and no port 22.
 
 On failure, systemd's `OnFailure` starts a unit that publishes the last 20 journal lines
 to SNS, so the alert email names the failing check rather than saying something broke.
@@ -105,9 +123,9 @@ Dependencies are declared in `requirements.in` and `requirements-dev.in`, then l
     uv pip compile requirements.in -o requirements.txt
     uv pip compile requirements-dev.in -o requirements-dev.txt -c requirements.txt
 
-Do not edit `requirements.txt` or `requirements-dev.txt` by hand  they are generated and
-your changes will be overwritten. The `-c` flag constrains dev dependencies to versions
-already pinned for runtime, so tests and production cannot drift apart.
+Do not edit `requirements.txt` or `requirements-dev.txt` by hand  they are generated.
+The `-c` flag constrains dev dependencies to versions already pinned for runtime, so
+tests and production cannot drift apart.
 
 The test suite makes no network calls. HTTP behavior is exercised with test doubles, and
 the system clock is injected rather than read, so certificate-expiry logic is
@@ -115,18 +133,20 @@ deterministic instead of depending on the date the suite happens to run.
 
 ## Known limitations
 
-- **The deployed image tag is pinned to a commit.** New images reach ECR but not the
-  running host until the systemd unit is updated. Continuous delivery stops at the
-  registry.
+- **Nothing monitors the monitor.** A single instance with no redundancy: if it stops,
+  the silence is indistinguishable from everything being fine. A heartbeat or dead-man's
+  switch is the fix.
 - **Infrastructure was created by hand** in the AWS console and is not yet codified.
 - **Alerts do not deduplicate.** A sustained outage emails every 15 minutes.
 - **No DNS drift detection**, so a stale dynamic-DNS record and a genuine outage look
   the same.
+- **Workloads run in the AWS Organization's management account.** Acceptable for a
+  single-account personal project; a separate member account is correct practice.
 
 ## Roadmap
 
-- Automated deployment, so merges to `main` update the running service
 - Terraform for the AWS resources
+- Heartbeat monitoring, so a dead monitor is noticed
 - Alert deduplication
 - DNS drift detection
 EOF
