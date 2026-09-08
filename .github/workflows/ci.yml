@@ -36,7 +36,7 @@ jobs:
         run: docker build -t service-watch:${{ github.sha }} .
 
       - name: Scan image (blocking)
-        uses: aquasecurity/trivy-action@v0.74.0
+        uses: aquasecurity/trivy-action@0.9.2
         with:
           image-ref: service-watch:${{ github.sha }}
           severity: CRITICAL
@@ -46,7 +46,7 @@ jobs:
 
       - name: Full vulnerability report
         if: always()
-        uses: aquasecurity/trivy-action@v0.74.0
+        uses: aquasecurity/trivy-action@0.9.2
         with:
           image-ref: service-watch:${{ github.sha }}
           severity: LOW,MEDIUM,HIGH,CRITICAL
