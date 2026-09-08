@@ -100,7 +100,7 @@ failed repeatedly — a real problem rather than a routine countdown.
 Every pull request runs, in order:
 
 1. Trivy install, pinned to the same version used locally
-2. `pre-commit` — ruff, workflow linting, YAML validation, secret detection, Terraform fmt and validate, and a Trivy scan of the Terraform for misconfigurations
+2. `pre-commit` — ruff, workflow linting, YAML validation, secret detection, bandit static analysis, Terraform fmt and validate, and a Trivy scan of the Terraform for misconfigurations
 3. Unit tests
 4. Container build
 5. Trivy vulnerability report
@@ -119,6 +119,11 @@ every one is something written in this repo — so the threshold sits lower than
 gate. Findings deliberately not fixed live in `.trivyignore`, each with a written reason.
 Unrestricted egress is the clearest: it is the highest-severity finding in the report and
 it stays, because a monitor that cannot reach arbitrary endpoints cannot do its job.
+
+Three kinds of scanning run against three kinds of artifact: bandit reads the Python for
+vulnerable patterns, Trivy reads the container image for known CVEs, and Trivy reads the
+Terraform for misconfigurations. Each gate was tested by deliberately introducing a
+finding and confirming it blocked, rather than by observing that it passed.
 
 Dependabot watches the base image, actions, and Python packages, grouped into one pull
 request per ecosystem. Every update is validated by the full pipeline before it can merge.
