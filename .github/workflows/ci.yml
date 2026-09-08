@@ -31,6 +31,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure
 
