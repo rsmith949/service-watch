@@ -32,7 +32,7 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-       - name: Build image
+      - name: Build image
         run: docker build -t service-watch:${{ github.sha }} .
 
       - name: Configure AWS credentials
