@@ -72,8 +72,13 @@ jobs:
       - name: Tag and push to ECR
         if: github.ref == 'refs/heads/main'
         run: |
-          docker tag service-watch:${{ github.sha }} ${{ steps.ecr.outputs.registry }}/service-watch:${{ github.sha }}
-          docker push ${{ steps.ecr.outputs.registry }}/service-watch:${{ github.sha }}
+          IMAGE="${{ steps.ecr.outputs.registry }}/service-watch:${{ github.sha }}"
+          if aws ecr describe-images --region us-west-2 --repository-name service-watch --image-ids imageTag=${{ github.sha }} > /dev/null 2>&1; then
+            echo "Image ${{ github.sha }} already in ECR  skipping push"
+          else
+            docker tag service-watch:${{ github.sha }} "$IMAGE"
+            docker push "$IMAGE"
+          fi
 
       - name: Publish deployed image tag
         if: github.ref == 'refs/heads/main'
