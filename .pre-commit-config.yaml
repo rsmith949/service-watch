@@ -42,3 +42,11 @@ repos:
         entry: trivy config --exit-code 1 --severity HIGH,CRITICAL terraform/
         pass_filenames: false
         files: ^terraform/.*\.tf$
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4 
+    hooks:
+      - id: bandit
+        args: ["-ll"]
+        exclude: ^tests/
+
