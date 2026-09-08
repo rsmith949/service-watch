@@ -35,6 +35,24 @@ jobs:
       - name: Build image
         run: docker build -t service-watch:${{ github.sha }} .
 
+      - name: Scan image (blocking)
+        uses: aquasecurity/trivy-action@v0.74.0
+        with:
+          image-ref: service-watch:${{ github.sha }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Full vulnerability report
+        if: always()
+        uses: aquasecurity/trivy-action@VERSION
+        with:
+          image-ref: service-watch:${{ github.sha }}
+          severity: LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: '0'
+          format: table
+
       - name: Configure AWS credentials
         if: github.ref == 'refs/heads/main'
         uses: aws-actions/configure-aws-credentials@v4
