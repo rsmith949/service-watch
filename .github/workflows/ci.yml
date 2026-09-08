@@ -29,8 +29,8 @@ jobs:
       - name: Check Ruff
         run: ruff check .
 
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files --show-diff-on-failure
 
       - name: Build image
         run: docker build -t service-watch:${{ github.sha }} .
@@ -46,7 +46,7 @@ jobs:
 
       - name: Full vulnerability report
         if: always()
-        uses: aquasecurity/trivy-action@VERSION
+        uses: aquasecurity/trivy-action@v0.74.0
         with:
           image-ref: service-watch:${{ github.sha }}
           severity: LOW,MEDIUM,HIGH,CRITICAL
