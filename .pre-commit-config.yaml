@@ -44,9 +44,8 @@ repos:
         files: ^terraform/.*\.tf$
 
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.9.4 
+    rev: 1.9.4
     hooks:
       - id: bandit
         args: ["-ll"]
         exclude: ^tests/
-
