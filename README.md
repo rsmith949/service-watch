@@ -43,24 +43,28 @@ flowchart LR
 
 ## Credentials
 
-There are none. No password, key, or secret is stored anywhere in this system.
+There are none. No password, key, or secret is stored anywhere in this system, and the
+account contains no IAM access keys at all — `aws iam list-access-keys` returns empty.
 
 | Actor | How it authenticates |
 |-------|---------------------|
 | The pipeline | GitHub OIDC federation — a signed token exchanged for credentials that expire in an hour |
 | The host | EC2 instance profile — credentials fetched from the instance metadata service |
-| A human | Short-lived session credentials; no static access keys on disk |
+| A human | IAM Identity Center — browser sign-in issuing session credentials that expire |
 
 Registry access on the host goes through the ECR credential helper, which fetches a
 token on demand and never writes it to disk.
 
 ## Infrastructure
 
-All 19 AWS resources are defined in Terraform under `terraform/` — IAM roles and
-policies, the GitHub OIDC provider, ECR, the security group, SNS, SSM, and the EC2
+All 21 AWS resources are defined in Terraform under `terraform/` — IAM roles and
+policies, the GitHub OIDC provider, ECR, the security group, SNS, SSM, KMS, and the EC2
 instance. `terraform plan` reports no drift between the code and what is deployed.
 
-State lives in S3: versioned, encrypted, and lock-protected using S3-native locking.
+State lives in S3: versioned, lock-protected using S3-native locking, and encrypted with
+a customer-managed KMS key that has annual rotation enabled. State can contain sensitive
+values, which is why it gets a customer-managed key while the alert topic uses the
+AWS-managed one — the threat models differ.
 
 `terraform fmt` and `terraform validate` run on every pull request through pre-commit.
 
@@ -95,11 +99,12 @@ failed repeatedly — a real problem rather than a routine countdown.
 
 Every pull request runs, in order:
 
-1. `pre-commit` — ruff, workflow linting, YAML validation, secret detection, Terraform fmt and validate
-2. Unit tests
-3. Container build
-4. Trivy vulnerability report
-5. Trivy gate — fails on CRITICAL findings that have fixes available
+1. Trivy install, pinned to the same version used locally
+2. `pre-commit` — ruff, workflow linting, YAML validation, secret detection, Terraform fmt and validate, and a Trivy scan of the Terraform for misconfigurations
+3. Unit tests
+4. Container build
+5. Trivy vulnerability report
+6. Trivy gate — fails on CRITICAL findings that have fixes available
 
 Merges to `main` additionally push a SHA-tagged image to ECR and publish that tag to
 Parameter Store. The push is idempotent: it checks whether the tag already exists,
@@ -108,6 +113,12 @@ re-run.
 
 The gate blocks only on critical *and* fixable findings. Blocking on everything produces
 a permanently red pipeline that people learn to bypass.
+
+The IaC scan gates on HIGH and above. Config findings have no equivalent of "fixable" —
+every one is something written in this repo — so the threshold sits lower than the image
+gate. Findings deliberately not fixed live in `.trivyignore`, each with a written reason.
+Unrestricted egress is the clearest: it is the highest-severity finding in the report and
+it stays, because a monitor that cannot reach arbitrary endpoints cannot do its job.
 
 Dependabot watches the base image, actions, and Python packages, grouped into one pull
 request per ecosystem. Every update is validated by the full pipeline before it can merge.
@@ -161,14 +172,16 @@ deterministic instead of depending on the date the suite happens to run.
   confirm by email, so a `terraform apply` against an empty account would leave it
   pending. It is importable and manageable, but not fully reproducible.
 - **The software inside the instance is not managed as code.** Docker, the systemd units
-  and the wrapper script were configured by hand. That is configuration management
-  rather than provisioning — a different problem, and the next one worth solving.
+  and the wrapper script were configured by hand. This has a concrete cost: the root EBS
+  volume is unencrypted, and encrypting it would replace the instance and destroy that
+  hand-built configuration. The finding is deferred in `.trivyignore` until provisioning
+  moves into `user_data`, which is the next problem worth solving.
 - **Workloads run in the AWS Organization's management account.** Acceptable for a
   single-account personal project; a separate member account is correct practice.
 
 ## Roadmap
 
-- Configuration management for the instance's software
+- Configuration management for the instance's software, unblocking root volume encryption
 - Heartbeat monitoring, so a dead monitor is noticed
 - Alert deduplication
 - DNS drift detection
