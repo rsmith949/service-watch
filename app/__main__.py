@@ -2,7 +2,7 @@
 
 from urllib.parse import urlparse
 
-from app.checks import check_http, check_tls
+from app.checks import check_dns, check_http, check_tls
 from app.config import Settings
 
 
@@ -18,6 +18,8 @@ def main() -> int:
     for url in targets:
         hostname = urlparse(url).hostname
         results = [check_http(url)]
+        if hostname:
+            results.append(check_dns(hostname))
         if url.startswith("https://") and hostname:
             results.append(check_tls(hostname, warn_days=settings.warn_days))
         for result in results:
