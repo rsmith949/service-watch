@@ -149,4 +149,12 @@ deterministic instead of depending on the date the suite happens to run.
 - Heartbeat monitoring, so a dead monitor is noticed
 - Alert deduplication
 - DNS drift detection
-EOF
+
+## A note on tooling
+
+This project was built with Claude as a pair programmer, providing iterative debugging,
+reasoning, code suggestions, and prose. I wrote the application and pipeline myself, chose the architecture,
+made the engineering decisions, verified every change against the running system, and
+debugged what did not work.
+
+I can explain any decision in this repository, including the ones I rejected and why.
