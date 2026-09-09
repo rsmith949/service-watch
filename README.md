@@ -1,6 +1,6 @@
 # service-watch
 
-External uptime and TLS certificate monitoring for self-hosted services.
+External uptime, DNS, and TLS certificate monitoring for self-hosted services.
 
 ## Why this exists
 
@@ -12,6 +12,7 @@ reports only what it can genuinely reach.
 It answers questions you would otherwise learn about from a complaint:
 
 - Is the service responding?
+- Does the hostname still resolve?
 - Is the TLS certificate about to expire?
 
 The second is quieter than it sounds. Automated certificate renewal fails silently:
@@ -22,6 +23,7 @@ nothing breaks for weeks, and then everything breaks at once.
 | Check | Reports |
 |-------|---------|
 | HTTP  | Status code and response time |
+| DNS   | Whether the hostname resolves, and to which addresses |
 | TLS   | Days remaining before expiry, warning below a configurable threshold |
 
 A failing check exits non-zero. The application knows nothing about AWS — it signals
@@ -171,8 +173,11 @@ deterministic instead of depending on the date the suite happens to run.
   the silence is indistinguishable from everything being fine. A heartbeat or dead-man's
   switch is the fix.
 - **Alerts do not deduplicate.** A sustained outage emails every 15 minutes.
-- **No DNS drift detection**, so a stale dynamic-DNS record and a genuine outage look
-  the same.
+- **DNS drift is not detected.** A hostname that fails to resolve is caught, but a
+  record that still resolves while pointing at a former address is not. Catching that
+  needs external state or a second source of truth, since a dynamic address changing is
+  normal rather than a fault. In practice, DNS resolving while HTTP cannot connect is
+  the stale-record signature.
 - **The SNS email subscription cannot be created from scratch.** AWS requires a human to
   confirm by email, so a `terraform apply` against an empty account would leave it
   pending. It is importable and manageable, but not fully reproducible.

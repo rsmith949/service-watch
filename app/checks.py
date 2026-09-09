@@ -57,3 +57,32 @@ def check_tls(hostname: str, port: int = 443, warn_days: int = 14, timeout: floa
         ok=days_left > warn_days,
         detail=f"{days_left} days until expiry",
     )
+
+
+def check_dns(hostname: str, expected: str | None = None) -> CheckResult:
+    """Resolve a hostname; optionally verify it points where we expect."""
+    start = time.perf_counter()
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as exc:
+        return CheckResult(
+            name=f"dns {hostname}",
+            ok=False,
+            detail=f"did not resolve: {exc}",
+            latency_ms=(time.perf_counter() - start) * 1000,
+        )
+    latency_ms = (time.perf_counter() - start) * 1000
+    addresses = sorted({info[4][0] for info in infos})
+    if expected is not None and expected not in addresses:
+        return CheckResult(
+            name=f"dns {hostname}",
+            ok=False,
+            detail=f"expected {expected}, resolved to {', '.join(addresses)}",
+            latency_ms=latency_ms,
+        )
+    return CheckResult(
+        name=f"dns {hostname}",
+        ok=True,
+        detail=", ".join(addresses),
+        latency_ms=latency_ms,
+    )
