@@ -15,7 +15,7 @@ certifi==2026.7.22
     #   httpx
 click==8.5.0
     # via uvicorn
-fastapi==0.141.1
+fastapi==0.142.2
     # via -r requirements.in
 h11==0.16.0
     # via
@@ -31,6 +31,8 @@ idna==3.19
     # via
     #   anyio
     #   httpx
+opentelemetry-api==1.45.1
+    # via fastapi
 pydantic==2.13.5
     # via
     #   fastapi
@@ -51,6 +53,7 @@ typing-extensions==4.16.0
     # via
     #   anyio
     #   fastapi
+    #   opentelemetry-api
     #   pydantic
     #   pydantic-core
     #   typing-inspection
@@ -59,7 +62,7 @@ typing-inspection==0.4.4
     #   fastapi
     #   pydantic
     #   pydantic-settings
-uvicorn==0.52.4
+uvicorn[standard]==0.54.0
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
